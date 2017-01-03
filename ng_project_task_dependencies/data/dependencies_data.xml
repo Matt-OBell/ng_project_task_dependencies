@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<openerp>
+    <data noupdate="1">
+        <record id="type_of_depend_0" model="project.task.depend">
+            <field name="name">None</field>
+            <field name="code">None</field>
+        </record>
+
+        <record id="type_of_depend_3" model="project.task.depend">
+            <field name="name">Finish To Start</field>
+            <field name="code">FTS</field>
+        </record>
+
+        <record id="type_of_depend_2" model="project.task.depend">
+            <field name="name">Start To Finish</field>
+            <field name="code">STF</field>
+        </record>
+
+        
+        <record id="type_of_depend_1" model="project.task.depend">
+            <field name="name">Start To Start</field>
+            <field name="code">STS</field>
+        </record>
+
+        <record id="type_of_depend_4" model="project.task.depend">
+            <field name="name">Finish To Finish</field>
+            <field name="code">FTF</field>
+        </record>
+
+    </data>
+</openerp>

@@ -1,0 +1,33 @@
+date: 5 march 2015
+
+We can implement that in Odoo.
+
+- Project/Configuration/Leads&Lags/Type of Dependencies
+* set 4 hard coded type of dependencies from  data xml file. (Do not allow user to create any new dependencies from this menu since its only four hard coded, user can not add more..)
+
+- On project form allow Project manager to select Type of Dependency (which is available on Project/Configuration/Leads&Lags/Type of Dependencies menu) and this will be default to all task.
+- On task form add Type of Dependency too (Default will come from project form as configured by Project manager.)
+* Also allow to specify the lead time and lag time on task form. Lead time field will only appear if user has selected ​FS (Finish to Start) activities on task form. Lag time field will always appear on task form. 
+- Add fields of multiple preceding tasks and multiple succeeding tasks​ on task form. So user can select previous tasks / dependent task and next task. (Same like on Project Phase form there is concept of next phase and previous phase..)​​.
+​
+Assuming here Start means if user changing the stage ​(Stage where Related status is "New") and Finish means if users changing the stage (Stage where Related status is "Done", Or using Done button on task form.)
+
+​Help full links: http://pmstudycircle.com/2013/02/lead-time-and-lag-time-in-project-scheduling-network-diagram/
+​http://projectized.blogspot.in/2005/06/project-lead-and-lag-time.html​ 
+http://www.brighthubpm.com/project-planning/51758-examples-of-leads-and-lags/
+
+So we need to track the changing of stages on task form and its related status on stage form. (Project/Conflagration/Stages/Project Stages)​​​
+​​
+Basically Lead is nothing but overlap and Lag is delay.
+
+=======================================
+
+Also as part of the changes:
+
+a) We need to allow multiple people to be assigned to a task
+b) We need to add those assigned to a task to be automatically added as followers of the task
+c) We need to automatically send emails on task activities to all followers of a task
+
+ - eg when task is updated or the stage has changed
+d) When we list tasks in a project, we need to be able to drag task up and down to rearrange them.  We can either do this on task list or on Gantt Chart
+e) Gantt Chart is still an issue. We need to discuss more on this to make it fully functionally

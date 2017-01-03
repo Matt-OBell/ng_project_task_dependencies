@@ -1,0 +1,150 @@
+<?xml version="1.0"?>
+<openerp>
+	<data>
+		<record id="project_type_of_depend_form" model="ir.ui.view">
+			<field name="name">project.type.of.depend.form</field>
+			<field name="model">project.task.depend</field>
+			<field name='type'>form</field>
+			<field name="arch" type="xml">
+				<form  string="Type of Dependencies" create='false'>
+					<group>
+						<group>
+							<field name="name" required="True"/>
+						</group>
+						<group>
+							<field name="code" required="True" />
+						</group>
+					</group>
+				</form>
+			</field>
+		</record>
+		
+		<record id="project_type_of_depend_tree" model="ir.ui.view">
+			<field name="name">project.type.of.depend.tree</field>
+			<field name="model">project.task.depend</field>
+			<field name='type'>tree</field>
+			<field name="arch" type="xml">
+				<tree string="Type of dependencies" create='false' >
+					<field name="name"/>
+					<field name="code"/>
+				</tree>
+			</field>
+		</record>
+		
+		<record id="project_type_of_depend_action" model="ir.actions.act_window">
+			<field name="name">Type of dependencies</field>
+			<field name="res_model">project.task.depend</field>
+			<field name='view_type'>form</field>
+			<field name="view_mode">tree,form</field>
+		</record>
+		
+		<menuitem id="type_of_depend_menu" name="Task Dependencies" parent="base.menu_definitions"/>
+		<menuitem id="type_of_depend_sub_menu" name="Type of Dependencies" parent="type_of_depend_menu" action='project_type_of_depend_action'/>
+		
+		<record id="edit_project_view_inheri_depend" model="ir.ui.view">
+			<field name="name">project.project.view.form.inherit</field>
+            <field name="model">project.project</field>
+            <field name="inherit_id" ref="project.edit_project"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='user_id']" position="after">
+                    <field name="depend" widget="selection"/>
+                </xpath>
+            </field>	
+		</record>
+		
+        <record id="roject_project_filter_search_view_new" model="ir.ui.view">
+            <field name="name">project.project.search.view</field>
+            <field name="model">project.project</field>
+            <field name="inherit_id" ref="project.view_project_project_filter"/>
+            <field name="arch" type="xml">
+                <xpath expr="//filter[@name='Parent']" position="after">
+                    <filter string="Type of dependecies" name="Type of Dependencies" domain = "[]" context="{'group_by':'depend'}"/>
+                </xpath>
+                <xpath expr="//field[@string='Contact']" position="after">
+                    <field name="depend"/>
+                </xpath>
+            </field>
+        </record>
+        <record id="roject_project_filter_tree_new_view" model="ir.ui.view">
+            <field name="name">project.project.tree.view</field>
+            <field name="model">project.project</field>
+            <field name="inherit_id" ref="project.view_project"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='state']" position="before">
+                    <field name="depend"/>
+                </xpath>
+            </field>
+        </record>
+		
+        <record id="view_task_form2_view_inherit" model="ir.ui.view">
+            <field name="name">project.task.form2.view.inherit</field>
+            <field name="model">project.task</field>
+            <field name="inherit_id" ref="project.view_task_form2"/>
+            <field name="arch" type="xml">
+                <xpath expr="//page[@string='Extra Info']" position="after">
+                    <page string="Dependent Tasks" attrs="{'readonly':[('state','in',['done', 'cancelled','complete'])]}">
+                        <group col="4" string="Previous Tasks Dependencies">
+                            <field name="previous_task_ids_new" nolabel="1" domain="[('project_id', '=',project_id), ('id', '!=', active_id)]">
+                            	<form string="Previous Tasks Dependencies">
+                            		<field name="prev_task_id" domain="[('project_id', '=',parent.project_id), ('id', '!=', parent.id)]"/>
+									<field name="depend_type"/>
+									<field name="lead_time" attrs="{'invisible':[('depend_type','in',['sts', 'stf'])]}"/>
+									<field name="lag_time" attrs="{'invisible':[('depend_type','in',['sts', 'stf'])]}"/>
+                            	</form>
+                            	<tree string="Previous Tasks Dependencies">
+                            		<field name="prev_task_id"/>
+									<field name="depend_type"/>
+									<field name="lead_time"/>
+									<field name="lag_time"/>
+                            	</tree>
+                            </field>
+                        </group>
+                        <group col="4" string="Next Tasks Dependencies">
+                            <field name="next_task_ids_new" nolabel="1" domain="[('project_id', '=',project_id), ('id', '!=', active_id)]">
+                            	<form string="Next Tasks Dependencies">
+                            		<field name="rel_task_id" readonly="True" domain="[('project_id', '=',parent.project_id), ('id', '!=', parent.id)]"/>
+									<!--<field name="depend_type"/>
+									<field name="lead_time"/>
+									<field name="lag_time"/> -->
+                            	</form>
+                            	<tree string="Next Tasks Dependencies">
+                            		<field name="rel_task_id"/>
+									<!--<field name="depend_type"/>
+									<field name="lead_time"/>
+									<field name="lag_time"/> -->
+                            	</tree>
+                            </field>
+                        </group>
+                    </page>		
+                </xpath>
+                <xpath expr="//field[@name='categ_ids']" position="after">
+                    <field name="user_ids" attrs="{'readonly':[('state','in',['done', 'complete'])]}"  widget="many2many_tags"/>
+                </xpath>
+	
+            </field>
+		</record>
+         <record id="view_task_tree2_my_1_depend" model="ir.ui.view">
+            <field name="name">project.tastk.tree</field>
+            <field name="model">project.task</field>
+            <field name="inherit_id" ref="project.view_task_tree2"/>
+            <field name="arch" type="xml">
+            <data>
+                <field name="user_id" position="after">
+                    <field name="user_ids" string="Assigned Users"  widget="many2many_tags"/>
+                </field>
+             </data>
+            </field>
+        </record>		
+        <record id="project_task_filter_search_view" model="ir.ui.view">
+            <field name="name">project.task.filter.search.view</field>
+            <field name="model">project.task</field>
+            <field name="inherit_id" ref="project.view_task_search_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='user_id']" position="after">
+                    <field name="user_ids"/>
+                </xpath>
+            </field>
+        </record>
+
+	</data>
+</openerp>

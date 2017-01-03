@@ -1,0 +1,233 @@
+##############################################################################
+#
+#    OpenERP, Open Source Management Solution
+#    Copyright (C) 2004-TODAY OpenERP S.A. <http://www.openerp.com>
+#    Copyright (C) 2014-TODAY Probuse Consulting Service Pvt. Ltd. (<http://probuse.com>).
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU Affero General Public License as
+#    published by the Free Software Foundation, either version 3 of the
+#    License, or (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU Affero General Public License for more details.
+#
+#    You should have received a copy of the GNU Affero General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+##############################################################################
+
+from openerp.osv import osv, fields
+from tools.translate import _
+import datetime
+import math 
+
+class project_task_depend(osv.Model):
+    _name = "project.task.depend"
+
+    _columns = {
+        'code' : fields.char('Code', required=1),
+        'name' : fields.char('Name', required=1)
+    }
+
+class project_project(osv.osv):
+    _inherit = 'project.project'
+
+    def _get_code(self, cr, uid, ids, context=None):
+        res = self.pool.get("project.task.depend").search(cr, uid, [('code', '=', 'FTS')], context=context)
+        return res[0]
+
+    _columns = {
+        'depend': fields.many2one("project.task.depend", 'Type Of Dependencies', required=1)
+    }
+
+    _defaults = {
+        'depend': _get_code
+    }
+
+class project_task(osv.Model):
+    _inherit = "project.task"
+
+    def _check_field_value(self, cr, uid, ids, context=None):
+        if context == None:
+            context = {}
+        obj_task = self.browse(cr, uid, ids[0], context=context)
+        lead_time = obj_task.lead_time or False
+        lag_time = obj_task.lag_time or False
+        if lag_time != 0.0 and lead_time != 0.0: 
+            return False
+        return True
+
+    _columns = {
+        'depend_type': fields.selection([('none', 'None'), ('fts','Finish To Start'), ('stf','Start To Finish'), ('sts','Start To Start'), ('ftf','Finish To Finish')], 'Type Of Dependency', required=True),
+        'lead_time' : fields.float('Lead Time Hour(s)'),
+        'lag_time': fields.float('Lag Time Hour(s)'),
+        'user_ids':fields.many2many('res.users', 'multi_emp_user_rel', 'task_id', 'u_id', 'Assign to Multiple Users'),
+        'next_task_ids': fields.many2many('project.task', 'project_task_depend_rel', 'pv_task_id', 'nt_task_id', 'Next Tasks', states={'cancelled':[('readonly',True)]}),
+        'previous_task_ids': fields.many2many('project.task', 'project_task_depend_rel', 'nt_task_id', 'pv_task_id', 'Previous Tasks', states={'cancelled':[('readonly',True)]}),
+
+    }
+    _defaults = {
+        'depend_type': 'fts'
+    }
+
+    _constraints = [
+        (_check_field_value, 'Error! You can not add lead time and lag time at same time. Any one field should be 0.0.', ['lead_time', 'lag_time'])
+    ]
+
+    def onchange_project(self, cr, uid, ids, project_id, context=None):
+        #todo .this method is not calling.
+        res = super(project_task, self).onchange_project(cr, uid, ids, project_id, context=context)
+        print "Resss",res
+        print s
+        if project_id:
+            project = self.pool.get('project.project').browse(cr, uid, project_id, context=context)
+            if project and project.depend:
+                return {'value': {'depend_type': project.depend.id}}
+        return {}
+
+    def create(self, cr, uid, vals, context=None):
+        res = super(project_task, self).create(cr, uid, vals, context)
+        if vals.get('user_ids', False):
+            #followers added for chatter 
+            self.message_subscribe_users(cr, uid, [res], user_ids=vals['user_ids'][0][2], context=context)
+        return res
+
+
+    def write(self, cr, uid, ids, vals, context=None):
+        # Start = open state and Finish = done state of Stage.
+        if vals.get('stage_id',False):
+            task = self.browse(cr, uid, ids, context=context)[0]
+            stage_my = self.pool.get('project.task.type').browse(cr, uid, [vals['stage_id']], context=context)[0]
+            st_name = task.stage_id.name
+            #send email to all users and followers
+            body = "Task Name: %s\n\n \
+                        Message: Stage of the task has been changed from %s to %s."%(task.name, st_name, stage_my.name)
+            self.message_post(cr, uid, [ids[0]], body=body, subject=task.name+' (Stage Changed)', type='email',context=context)
+
+
+            previous_task_ids = [x.id for x in task.previous_task_ids ]
+            #if task has type of dependencies...
+            if task.depend_type !='none' and task.previous_task_ids:
+
+                #if Finish to Start doesn't have lead or lag time it check only state
+                if task.depend_type == 'fts' and task.lead_time == 0.0 and task.lag_time == 0.0: #Finish to Start
+                    for prev in task.previous_task_ids:
+                        if prev.stage_id.state != 'done' and stage_my.state in ['open','done']:
+                            raise osv.except_osv(_('Warning!'), _('You can not start this task since previous task(s) is still not done.'))
+                #if Finish to Start have only lag_time then it will wait for start upto lag time after completed previous task . 
+                elif task.depend_type == 'fts' and task.lead_time == 0.0 and task.lag_time > 0.0:
+                    for prev in task.previous_task_ids:
+                        end_date = datetime.datetime.strptime(prev.date_end, "%Y-%m-%d %H:%M:%S")
+                        delta = datetime.timedelta(hours = task.lag_time)
+                        print "Ssssssssssssssssss",delta,end_date,datetime.datetime.now()
+                        end_date_timedelta = end_date + datetime.timedelta(hours = task.lag_time)
+                        print "end_date_timedelta:PPPPPPPPPPPPPP",end_date_timedelta
+                        if end_date_timedelta > datetime.datetime.now():
+                            print "Sssssssssss"
+                            if prev.stage_id.state != 'done' and stage_my.state == 'open':
+                                raise osv.except_osv(_('Warning!'), _('You can not start this task since previous task(s) is still not done.'))
+                        else:
+                            pass
+                            print "SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS"
+                        
+#                        end_date_diff=  datetime.datetime.now() - end_date
+#                        hours_to_end_task= (end_date_diff.days * 24) + (end_date_diff.seconds / 60.00) / 60.00
+#                        my_st_date = datetime.datetime.strptime(task.date_start, "%Y-%m-%d %H:%M:%S")
+#                        start_date_diff=  datetime.datetime.now() - my_st_date
+#                        st_hours= (start_date_diff.days * 24) + (start_date_diff.seconds / 60.00) / 60.00
+#                        hours_to_start_task = st_hours + task.lag_time 
+                #if Finish to Start have only lead time then it allow to start task before completing previous task upto lead time.
+                elif task.depend_type == 'fts' and task.lead_time > 0.0 and task.lag_time == 0.0:
+                    for prev in task.previous_task_ids:
+                        end_date = datetime.datetime.strptime(prev.date_end, "%Y-%m-%d %H:%M:%S")
+                        print "end_date",end_date,datetime.datetime.now()
+                        
+                        
+                        if datetime.datetime.now()  > end_date:
+                            end_date_diff=  datetime.datetime.now() - end_date
+                        else:
+                            end_date_diff= end_date - datetime.datetime.now()
+                        print "end_date_diff",end_date_diff
+                        hours = (end_date_diff.days * 24) + (end_date_diff.seconds / 60.00) / 60.00
+                        print "hoursss",hours
+                        
+                        if hours < task.lead_time:
+                            print "PPPPPPPPPPPPPPPPPPPPPPPPP"
+                            pass
+                        else:
+#                        hours_to_end_task = hours + task.lead_time
+#                        print "hours_to_end_task",hours_to_end_task
+#                        my_st_date = datetime.datetime.strptime(task.date_start, "%Y-%m-%d %H:%M:%S")
+#                        print "my_st_date",my_st_date
+#                        start_date_diff=  datetime.datetime.now() - my_st_date
+#                        print "start_date_diff",start_date_diff
+#                        hours_to_start_task = (start_date_diff.days * 24) + (start_date_diff.seconds / 60.00) / 60.00
+#                        print "hours_to_start_task",hours_to_start_task
+                            if prev.stage_id.state != 'done' and stage_my.state == 'open':
+                                raise osv.except_osv(_('Warning!'), _('You can not start this task since previous task(s) is still not done.'))
+
+
+                if task.depend_type == 'stf': #Start to Finish
+                    for prev in task.previous_task_ids:
+                        if prev.stage_id.state == 'draft' and stage_my.state == 'done':
+                            raise osv.except_osv(_('Warning!'), _('You can not done this task since previous task(s) is still not started.'))
+#                elif task.depend_type == 'stf' and task.lag_time > 0.0: #Start to Finish
+#                    for prev in task.previous_task_ids:
+#                        end_date = datetime.datetime.strptime(prev.date_end, "%Y-%m-%d %H:%M:%S")
+#                        end_date_diff=  datetime.datetime.now() - end_date
+#                        hours_to_end_task= (end_date_diff.days * 24) + (end_date_diff.seconds / 60.00) / 60.00
+#                        my_st_date = datetime.datetime.strptime(task.date_start, "%Y-%m-%d %H:%M:%S")
+#                        start_date_diff=  datetime.datetime.now() - my_st_date
+#                        hours_to_start_task= (start_date_diff.days * 24) + (start_date_diff.seconds / 60.00) / 60.00
+#                        if prev.stage_id.state == 'draft' or hours_to_start_task > hours_to_end_task and stage_my.state == 'done':
+#                            raise osv.except_osv(_('Warning!'), _('You can not done this task since previous task(s) is still not started.'))
+
+                if task.depend_type == 'sts' and task.lag_time == 0.0: #Start to Start
+                    for prev in task.previous_task_ids:
+#                        st_date = datetime.datetime.strptime(prev.date_start, "%Y-%m-%d %H:%M:%S")
+#                        st_date_diff=  datetime.datetime.now() - st_date
+#                        taks_to_start_hour= (st_date_diff.days * 24) + (st_date_diff.seconds / 60.0) / 60.0
+#                        my_task_st_date = datetime.datetime.strptime(task.date_start, "%Y-%m-%d %H:%M:%S")
+#                        my_st_date_diff = datetime.datetime.now() - my_task_st_date
+#                        my_hour = (my_st_date_diff.days * 24) +(my_st_date_diff.seconds / 60.0) / 60.0
+                        if prev.stage_id.state == 'draft' and stage_my.state == 'open':
+                            raise osv.except_osv(_('Warning!'), _('You can not start this task since previous task(s) is still not started.'))
+#                elif task.depend_type == 'sts' and task.lag_time > 0.0: #Start to Start
+#                    for prev in task.previous_task_ids:
+#                        end_date = datetime.datetime.strptime(prev.date_end, "%Y-%m-%d %H:%M:%S")
+#                        end_date_diff=  datetime.datetime.now() - end_date
+#                        hours= (end_date_diff.days * 24) + (end_date_diff.seconds / 60.0) / 60.0
+#                        taks_to_start_hour = hours + task.lag_time
+#                        my_task_st_date = datetime.datetime.strptime(task.date_start, "%Y-%m-%d %H:%M:%S")
+#                        my_st_date_diff = datetime.datetime.now() - my_task_st_date
+#                        my_hour = (my_st_date_diff.days * 24) +(my_st_date_diff.seconds / 60.0) / 60.0
+#                        if prev.stage_id.state == 'draft' or my_hour > taks_to_start_hour and stage_my.state == 'open' :
+#                            raise osv.except_osv(_('Warning!'), _('You can not start this task since previous task(s) is still not started.'))
+
+                
+                if task.depend_type == 'ftf' and task.lag_time == 0.0: #Finish to Finish
+                    for prev in task.previous_task_ids:
+#                        end_date = datetime.datetime.strptime(prev.date_end, "%Y-%m-%d %H:%M:%S")
+#                        end_date_diff=  datetime.datetime.now() - end_date
+#                        taks_to_start_hour= (end_date_diff.days * 24) + (end_date_diff.seconds / 60.0) / 60.0
+#                        my_task_end_date = datetime.datetime.strptime(task.date_end, "%Y-%m-%d %H:%M:%S")
+#                        my_end_date_diff = datetime.datetime.now() - my_task_end_date
+#                        my_hour = (my_end_date_diff.days * 24) +(my_end_date_diff.seconds / 60) / 60
+                        if prev.stage_id.state != 'done' and stage_my.state == 'done':
+                            raise osv.except_osv(_('Warning!'), _('You can not done this task since previous task(s) is still not done.'))
+#                elif task.depend_type == 'ftf' and task.lag_time > 0.0: #Finish to Finish
+#                    for prev in task.previous_task_ids:
+#                        end_date = datetime.datetime.strptime(prev.date_end, "%Y-%m-%d %H:%M:%S")
+#                        end_date_diff=  datetime.datetime.now() - end_date
+#                        hours = (end_date_diff.days * 24) + (end_date_diff.seconds / 60.0) / 60.0
+#                        taks_to_start_hour = hours + task.lag_time
+#                        my_task_end_date = datetime.datetime.strptime(task.date_end, "%Y-%m-%d %H:%M:%S")
+#                        my_end_date_diff = datetime.datetime.now() - my_task_end_date
+#                        my_hour = (my_end_date_diff.days * 24) +(my_end_date_diff.seconds / 60.0) / 60.0
+#                        if prev.stage_id.state != 'done'or my_hour < taks_to_start_hour and stage_my.state == 'done' :
+#                            raise osv.except_osv(_('Warning!'), _('You can not done this task since previous task(s) is still not done.'))
+
+        return super(project_task, self).write(cr, uid, ids, vals, context=context)
